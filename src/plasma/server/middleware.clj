@@ -15,5 +15,6 @@
            (require ns)
            (when on-required
              (on-required ns))
-           (f event args))
-         (catch java.io.FileNotFoundException _))))))
+           )
+         (catch java.io.FileNotFoundException _)))
+     (f event args))))
