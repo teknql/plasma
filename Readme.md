@@ -34,6 +34,7 @@ possible.
 - [X] Stream management
 - [X] Session state management
 - [X] Session-lifetime bounded resources and cleanup
+- [ ] Write transports
 - [ ] Compiled middleware via `defn` attribute maps.
 - [ ] Abstract serialization (currently only trasnit)
 - [ ] Abstract session management (currently only in-memory)

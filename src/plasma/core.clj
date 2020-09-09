@@ -1,8 +1,6 @@
 (ns plasma.core
   "Core namespace for Plasma"
-  (:require [systemic.core :as systemic]
-            [clojure.core.match :refer [match]]
-            [manifold.stream :as s]))
+  (:require [plasma.macro :as macro]))
 
 (def ^:dynamic *state*
   "Client state"
@@ -35,80 +33,32 @@
      (get @*state* k default))))
 
 (defn register-resource!
-  "Registers a resource in the client resources"
-  ([resource]
-   (register-resource! (java.util.UUID/randomUUID) resource))
-  ([id resource]
+  "Registers a resource in the client resources with the given `id` and returns the `id`.
+
+  Calls `resource-cleanup-fn` on close.
+
+  If no `id` is provided, one will be generated automatically."
+  ([resource-cleanup-fn]
+   (register-resource! (java.util.UUID/randomUUID) resource-cleanup-fn))
+  ([id resource-cleanup-fn]
    (when *resources*
-     (swap! *resources* assoc id resource)
+     (swap! *resources* assoc id resource-cleanup-fn)
      id)))
 
-(defn handle
-  "Invoke the provided handler and return an `:ok` ,`:stream` or `:error` tuple."
-  [event-name args]
-  (let [fn-var (if-let [resolved (resolve event-name)]
-                 resolved
-                 (try
-                   (require (-> event-name namespace symbol))
-                   (systemic/start!)
-                   (resolve event-name)
-                   (catch java.io.FileNotFoundException _)))]
+(defn cleanup-resource!
+  "Cleans up the resource with the specified `id`, if it exists."
+  [id]
+  (when-some [cleanup-fn (some-> *resources* deref (get id))]
     (try
-      (let [result (apply fn-var args)]
-        (if-not (s/stream? result)
-          [:ok result]
-          (let [s (s/stream)]
-            (s/connect result s {:timeout 100 :downstream? false})
-            [:stream s])))
-      (catch Exception e
-        [:error e]))))
-
-(defn receive!
-  "Takes an event-name and args and returns a function that should be invoked with `send!` to
-  transport responses."
-  [type req-id event-name args]
-  (bound-fn [send! on-error]
-    (case type
-      :plasma/dispose
-      (when-some [s (get @*resources* req-id)]
-        (s/close! s)
-        (swap! *resources* dissoc req-id))
-      :plasma/request
-      (send!
-        (match (handle event-name args)
-          [:error (e :guard #(nil? (-> % ex-data :plasma/error)))]
-          (do (on-error e event-name args)
-              [:error req-id (ex-info "Internal Server" {})])
-          [:error  e] [:error req-id e]
-          [:stream stream] (do (s/on-closed stream #(send! [:close req-id]))
-                               (register-resource! req-id stream)
-                               (s/consume #(send! [:stream req-id %]) stream)
-                               [:stream-start req-id])
-          [:ok resp] [:ok req-id resp])))))
-
-(defn- parse-args
-  "Helper for writing macros. Returns the data as a structured map."
-  [args]
-  (let [[name args]       [(first args) (rest args)]
-        [doc-str args]    (if (string? (first args))
-                            [(first args) (rest args)]
-                            [nil args])
-        [attr-map args]   (if (map? (first args))
-                            [(first args) (rest args)]
-                            [nil args])
-        [bindings & body] args
-        attr-map          (cond-> (or attr-map {})
-                            doc-str (assoc :doc doc-str))]
-    {:name     name
-     :attr-map attr-map
-     :bindings bindings
-     :body     body}))
+      (cleanup-fn)
+      (finally
+        (swap! *resources* dissoc id)))))
 
 (defmacro defhandler
   "Define a plasma handler"
   {:arglists '([name doc-str? attr-map? [params*] body])}
   [& args]
-  (let [{:keys [name attr-map bindings body]} (parse-args args)
+  (let [{:keys [name attr-map bindings body]} (macro/parse-args args)
         ns-name                               (some-> &env :ns :name str)
         cljs?                                 (some? ns-name)
         req                                   (when cljs?
@@ -128,7 +78,7 @@
   "Define a plasma stream"
   {:arglists '([name doc-str? attr-map? [params*] body])}
   [& args]
-  (let [{:keys [name attr-map bindings body]} (parse-args args)
+  (let [{:keys [name attr-map bindings body]} (macro/parse-args args)
         ns-name                               (some-> &env :ns :name str)
         cljs?                                 (some? ns-name)
         req                                   (when cljs?

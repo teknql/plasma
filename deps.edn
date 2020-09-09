@@ -1,3 +1,5 @@
 {:paths ["src"]
  :deps
- {}}
+ {funcool/promesa        {:mvn/version "5.1.0"}
+  manifold               {:mvn/version "0.1.9-alpha3"}
+  org.clojure/core.match {:mvn/version "1.0.0"}}}

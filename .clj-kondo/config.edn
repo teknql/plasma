@@ -1,0 +1,5 @@
+{:hooks   {:analyze-call {plasma.core/defhandler hooks.plasma/defhandler
+                          plasma.core/defstream  hooks.plasma/defhandler}}
+ :linters {:unresolved-symbol
+           {:skip-args []
+            :exclude   [(clojure.core.match/match)]}}}
