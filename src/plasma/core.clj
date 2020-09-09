@@ -54,6 +54,13 @@
       (finally
         (swap! *resources* dissoc id)))))
 
+(defn cleanup-resources!
+  "Cleans up all resources"
+  []
+  (doseq [cleanup-fn (some-> *resources* deref vals)]
+    (cleanup-fn))
+  (reset! *resources* {}))
+
 (defmacro defhandler
   "Define a plasma handler"
   {:arglists '([name doc-str? attr-map? [params*] body])}
