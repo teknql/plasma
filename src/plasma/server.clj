@@ -34,7 +34,7 @@
               [:error req-id (ex-info "Internal Server" {})])
           [:error  e] [:error req-id e]
           [:stream stream] (do (s/on-closed stream #(send! [:close req-id]))
-                               (register-resource! req-id #(s/close! stream))
+                               (plasma/register-resource! req-id #(s/close! stream))
                                (s/consume #(send! [:stream req-id %]) stream)
                                [:stream-start req-id])
           [:ok resp] [:ok req-id resp])))))
