@@ -21,7 +21,7 @@
 (defn receive!
   "Takes an event-name and args and returns a function that should be invoked with `send!` and `on-error`
   to transport responses."
-  [type req-id event-name args]
+  [handle type req-id event-name args]
   (bound-fn [send! on-error]
     (case type
       :plasma/dispose
