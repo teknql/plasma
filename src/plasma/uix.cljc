@@ -36,12 +36,20 @@
 
 (defmacro with-stream
   "Macro to consume a stream"
-  [deps init f]
-  `(uix/with-effect ~deps
-     (let [s# ~init]
-       (plasma.client.stream/consume-via! s# #(do (~f %)
-                                                  true))
-       #(plasma.client.stream/close! s#))))
+  ([deps stream on-item]
+   `(with-stream ~deps ~stream nil ~on-item))
+  ([deps stream on-init on-item]
+   `(let [init?#   (uix/state false)
+          on-init# ~on-init
+          on-item# ~on-item]
+      (uix/with-effect ~deps
+        (let [s# ~stream]
+          (when on-init#
+            (plasma.client.stream/on-initialized s# on-init#))
+          (plasma.client.stream/consume-via!
+            s# #(do (on-item# %) true))
+          #(plasma.client.stream/close! s#))))))
+
 
 (defmacro with-rpc
   "Macro helper for making an RPC call"

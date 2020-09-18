@@ -14,7 +14,6 @@
          (let [ns (-> event namespace symbol)]
            (require ns)
            (when on-required
-             (on-required ns))
-           )
+             (on-required ns)))
          (catch java.io.FileNotFoundException _)))
      (f event args))))
