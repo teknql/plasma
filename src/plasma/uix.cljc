@@ -27,9 +27,9 @@
     `(let [[state#] (state {:loading? false})]
        (hooks/effect! (fn []
                         (reset! state!# {:loading? true})
-                        (-> ~rpc-call
-                            (p/chain #(reset! state!# {:loading? false :data %}))
-                            (p/catch #(reset! state!# {:loading? false :error %})))
+                        (some-> ~rpc-call
+                                (p/chain #(reset! state!# {:loading? false :data %}))
+                                (p/catch #(reset! state!# {:loading? false :error %})))
                         js/undefined)
                       ~deps)
        state#)))
@@ -62,6 +62,8 @@
        `(let [on-success# ~on-success
               on-fail#    ~on-fail]
           (uix/with-effect ~deps
-            (cond-> ~rpc
-              on-success# (promesa.core/then on-success#)
-              on-fail#    (promesa.core/catch on-fail#))))))))
+            (let [rpc# ~rpc]
+              (when rpc#
+                (cond-> ~rpc
+                  on-success# (promesa.core/then on-success#)
+                  on-fail#    (promesa.core/catch on-fail#))))))))))
