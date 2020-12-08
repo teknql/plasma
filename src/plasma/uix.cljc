@@ -64,6 +64,6 @@
           (uix/with-effect ~deps
             (let [rpc# ~rpc]
               (when rpc#
-                (cond-> ~rpc
+                (cond-> rpc#
                   on-success# (promesa.core/then on-success#)
                   on-fail#    (promesa.core/catch on-fail#))))))))))
