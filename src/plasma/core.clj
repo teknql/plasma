@@ -2,25 +2,25 @@
   "Core namespace for Plasma"
   (:require [plasma.macro :as macro]))
 
-(def ^:dynamic *state*
-  "Client state"
-  nil)
-
-(def ^:dynamic *resources*
-  "Client resources"
+(def ^:dynamic *context*
+  "Request context for Plasma"
   nil)
 
 (defn assoc-state!
   "Associates data in the client state"
   [k data & kvs]
-  (when *state*
-    (apply swap! *state* assoc k data kvs)))
+  (when-some [ctx *context*]
+    (let [client   (:client ctx)
+          sessions (get-in ctx [:server :sessions])]
+      (apply swap! sessions update-in [client :state] assoc k data kvs))))
 
 (defn dissoc-state!
   "Dissociates the provided `k` in state."
   [k & ks]
-  (when *state*
-    (apply swap! *state* dissoc k ks)))
+  (when-some [ctx *context*]
+    (let [client   (:client ctx)
+          sessions (get-in ctx [:server :sessions])]
+      (apply swap! sessions update-in [client :state] dissoc k ks))))
 
 (defn get-state
   "Gets data from the plasma state.
@@ -28,9 +28,10 @@
   Takes an optional `default` if the value doesn't exist."
   ([k] (get-state k nil))
   ([k default]
-   (if-not *state*
-     default
-     (get @*state* k default))))
+   (when-some [ctx *context*]
+    (let [client   (:client ctx)
+          sessions (get-in ctx [:server :sessions])]
+      (get-in @sessions [client :state k] default)))))
 
 (defn register-resource!
   "Registers a resource in the client resources with the given `id` and returns the `id`.
@@ -41,25 +42,37 @@
   ([resource-cleanup-fn]
    (register-resource! (java.util.UUID/randomUUID) resource-cleanup-fn))
   ([id resource-cleanup-fn]
-   (when *resources*
-     (swap! *resources* assoc id resource-cleanup-fn)
-     id)))
+   (when-some [ctx *context*]
+     (let [client   (:client ctx)
+           sessions (get-in ctx [:server :sessions])]
+       (swap! @sessions [client :resources] assoc id resource-cleanup-fn)
+       id))))
 
 (defn cleanup-resource!
   "Cleans up the resource with the specified `id`, if it exists."
   [id]
-  (when-some [cleanup-fn (some-> *resources* deref (get id))]
-    (try
-      (cleanup-fn)
-      (finally
-        (swap! *resources* dissoc id)))))
+  (when-some [ctx *context*]
+    (let [client   (:client ctx)
+          sessions (get-in ctx [:server :sessions])
+          cleanup  (get-in @sessions [client :resources id])]
+      (try
+        (when cleanup
+          (cleanup))
+        (finally
+          (swap! sessions update-in [client :resources] dissoc id))))))
 
 (defn cleanup-resources!
   "Cleans up all resources"
   []
-  (doseq [cleanup-fn (some-> *resources* deref vals)]
-    (cleanup-fn))
-  (reset! *resources* {}))
+  (when-some [ctx *context*]
+    (let [client    (:client ctx)
+          sessions  (get-in ctx [:server :sessions])
+          resources (get-in @sessions [client :resources])]
+      (try
+        (doseq [cleanup-fn (vals resources)]
+          (cleanup-fn))
+        (finally
+          (swap! sessions update client assoc :resources {}))))))
 
 (defmacro defhandler
   "Define a plasma handler"

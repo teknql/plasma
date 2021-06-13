@@ -1,7 +1,8 @@
 (ns plasma.client
   (:require [promesa.core :as p]
             [plasma.client.transport :as transport]
-            [plasma.client.stream :as s]))
+            [plasma.client.stream :as s]
+            [cognitect.transit :as t]))
 
 
 (def ^:private state
@@ -31,6 +32,25 @@
         :error        (do (p/reject! known data)
                           (swap! state dissoc event-id)))
       (.warn js/console (str "No pending request found for request ID " event-id)))))
+
+(defn websocket-transport
+  "Build a transport using a websocket"
+  ([url] (websocket-transport url {}))
+  ([url {:keys [on-open on-close on-error
+                transit-read-handlers
+                transit-write-handlers]}]
+   (let [ws     (js/WebSocket. url)
+         reader (t/reader :json {:handlers transit-read-handlers})
+         writer (t/writer :json {:handlers transit-write-handlers})]
+     (when on-open
+       (set! (.-onopen ws) on-open))
+     (when on-close
+       (set! (.-onclose ws) on-close))
+     (when on-error
+       (set! (.-onerror ws) on-error))
+     (set! (.-onmessage ws)
+           #(receive! (t/read reader (.-data %))))
+     #(.send ws (t/write writer %&)))))
 
 (defn use-transport!
   "Set function used to send requests.

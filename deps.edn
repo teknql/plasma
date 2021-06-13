@@ -1,5 +1,8 @@
 {:paths ["src"]
  :deps
- {funcool/promesa        {:mvn/version "5.1.0"}
-  manifold/manifold      {:mvn/version "0.1.9-alpha3"}
-  org.clojure/core.match {:mvn/version "1.0.0"}}}
+ {funcool/promesa            {:mvn/version "5.1.0"}
+  manifold/manifold          {:mvn/version "0.1.9-alpha3"}
+  com.cognitect/transit-clj  {:mvn/version "1.0.324"}
+  com.cognitect/transit-cljs {:mvn/version "0.8.269"}
+  org.clojure/core.match     {:mvn/version "1.0.0"}
+  metosin/sieppari           {:mvn/version "0.0.0-alpha13"}}}
