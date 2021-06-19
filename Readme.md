@@ -2,6 +2,14 @@
 
 Web RPC for Clojure + Clojurescript.
 
+## Status
+
+Extremely early access. Currently being spun out from internal projects at Teknql.
+
+APIs likely to change (sometimes drastically) and documentation not yet written.
+
+Use at your own risk.
+
 
 ## What
 
