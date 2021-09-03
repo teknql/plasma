@@ -24,13 +24,14 @@
   [rpc-call & [deps]]
   (if-not (:ns &env)
     `{:data ~rpc-call :loading? false}
-    `(let [[state#] (state {:loading? false})]
+    `(let [closed?# (uix/ref false)
+           state#   (state {:loading? false})]
        (hooks/effect! (fn []
                         (reset! state!# {:loading? true})
                         (some-> ~rpc-call
-                                (p/chain #(reset! state!# {:loading? false :data %}))
-                                (p/catch #(reset! state!# {:loading? false :error %})))
-                        js/undefined)
+                                (p/chain #(when-not @closed?# (reset! state!# {:loading? false :data %})))
+                                (p/catch #(when-not @closed?# (reset! state!# {:loading? false :error %}))))
+                        (fn [] (reset! closed?# true)))
                       ~deps)
        state#)))
 
