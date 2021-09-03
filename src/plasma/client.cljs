@@ -41,16 +41,25 @@
                 transit-write-handlers]}]
    (let [ws     (js/WebSocket. url)
          reader (t/reader :json {:handlers transit-read-handlers})
-         writer (t/writer :json {:handlers transit-write-handlers})]
-     (when on-open
-       (set! (.-onopen ws) on-open))
-     (when on-close
-       (set! (.-onclose ws) on-close))
+         writer (t/writer :json {:handlers transit-write-handlers})
+         state  (atom {:connected? false :buffer []})
+         send-f #(if (:connected? @state)
+                   (.send ws (t/write writer %&))
+                   (swap! state update :buffer conj %&))]
+     (set! (.-onopen ws)
+           (fn []
+             (swap! state assoc :connected? true)
+             (doseq [msg (:buffer @state)]
+               (apply send-f msg))
+             (swap! state assoc :buffer [])
+             (when on-open (on-open))))
+     (set! (.-onclose ws) #(do (swap! state assoc :connected? false)
+                               (when on-close (on-close))))
      (when on-error
        (set! (.-onerror ws) on-error))
      (set! (.-onmessage ws)
            #(receive! (t/read reader (.-data %))))
-     #(.send ws (t/write writer %&)))))
+     send-f)))
 
 (defn use-transport!
   "Set function used to send requests.
