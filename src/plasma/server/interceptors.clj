@@ -20,7 +20,7 @@
               (require ns)
               (when on-required
                 (on-required ns)
-                (assoc-in ctx [:request fn-var] (resolve event-name))))
+                (assoc-in ctx [:request :fn-var] (resolve event-name))))
             (catch java.io.FileNotFoundException _
               ctx)))))}))
 
