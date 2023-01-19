@@ -81,6 +81,13 @@
   (let [{:keys [name attr-map bindings body]} (macro/parse-args args)
         ns-name                               (some-> &env :ns :name str)
         cljs?                                 (some? ns-name)
+        new-bindings                          (if-not cljs?
+                                                bindings
+                                                (mapv (fn [_] (gensym)) bindings))
+        attr-map                              (if (and cljs? (not (:arglists attr-map)))
+                                                (-> attr-map
+                                                    (assoc :arglists `([~@bindings])))
+                                                attr-map)
         req                                   (when cljs?
                                                 [`(require '[plasma.client])])
         body                                  (if cljs?
@@ -91,7 +98,7 @@
     `(do ~@req
          (defn ~name
            ~attr-map
-           ~bindings
+           ~new-bindings
            ~@body))))
 
 (defmacro defstream
@@ -101,6 +108,13 @@
   (let [{:keys [name attr-map bindings body]} (macro/parse-args args)
         ns-name                               (some-> &env :ns :name str)
         cljs?                                 (some? ns-name)
+        new-bindings                          (if-not cljs?
+                                                bindings
+                                                (mapv (fn [_] (gensym)) bindings))
+        attr-map                              (if (and cljs? (not (:arglists attr-map)))
+                                                (-> attr-map
+                                                    (assoc :arglists `([~@bindings])))
+                                                attr-map)
         req                                   (when cljs?
                                                 [`(require '[plasma.client])])
         body                                  (if cljs?
@@ -111,5 +125,5 @@
     `(do ~@req
          (defn ~name
            ~attr-map
-           ~bindings
+           ~new-bindings
            ~@body))))
