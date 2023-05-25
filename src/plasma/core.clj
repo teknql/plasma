@@ -45,7 +45,7 @@
    (when-some [ctx *context*]
      (let [client   (:client ctx)
            sessions (get-in ctx [:server :sessions])]
-       (swap! @sessions [client :resources] assoc id resource-cleanup-fn)
+       (swap! sessions assoc-in [client :resources id] resource-cleanup-fn)
        id))))
 
 (defn cleanup-resource!

@@ -70,37 +70,39 @@
 (defn on-message!
   "Callback to be invoked in an adapter"
   [server client-handle data]
-  (let [{:keys [transit-read-handlers
-                transit-format
-                on-error
-                interceptors]}              server
-        [plasma-msg req-id event-name args] (-> (transit/reader
-                                                  (ByteArrayInputStream. (.getBytes data))
-                                                  transit-format
-                                                  {:handlers transit-read-handlers})
-                                                (transit/read))]
-    (case plasma-msg
-      :plasma/dispose (plasma/cleanup-resource! req-id)
-      :plasma/request
-      (send!
-        server
-        client-handle
-        (let [ctx (sieparri/execute-context
-                    (conj interceptors request-handler)
-                    {:request
-                     {:server     server
-                      :client     client-handle
-                      :event-name event-name
-                      :args       args
-                      :fn-var     (resolve event-name)}})]
-          (match (:response ctx)
-            [:error (e :guard #(nil? (-> % ex-data :plasma/error)))]
-            (do (when on-error
-                  (on-error {:error e :ctx ctx}))
-                [:error req-id (ex-info "Internal Server" {})])
-            [:error e] [:error req-id e]
-            [:stream stream] (do (s/on-closed stream #(send! server client-handle [:close req-id]))
-                                 (plasma/register-resource! req-id #(s/close! stream))
-                                 (s/consume #(send! server client-handle [:stream req-id %]) stream)
-                                 [:stream-start req-id])
-            [:ok resp] [:ok req-id resp]))))))
+  (binding [plasma/*context* {:server server
+                              :client client-handle}]
+    (let [{:keys [transit-read-handlers
+                  transit-format
+                  on-error
+                  interceptors]}              server
+          [plasma-msg req-id event-name args] (-> (transit/reader
+                                                    (ByteArrayInputStream. (.getBytes data))
+                                                    transit-format
+                                                    {:handlers transit-read-handlers})
+                                                  (transit/read))]
+      (case plasma-msg
+        :plasma/dispose (plasma/cleanup-resource! req-id)
+        :plasma/request
+        (send!
+          server
+          client-handle
+          (let [ctx (sieparri/execute-context
+                      (conj interceptors request-handler)
+                      {:request
+                       {:server     server
+                        :client     client-handle
+                        :event-name event-name
+                        :args       args
+                        :fn-var     (resolve event-name)}})]
+            (match (:response ctx)
+              [:error (e :guard #(nil? (-> % ex-data :plasma/error)))]
+              (do (when on-error
+                    (on-error {:error e :ctx ctx}))
+                  [:error req-id (ex-info "Internal Server" {})])
+              [:error e] [:error req-id e]
+              [:stream stream] (do (s/on-closed stream #(send! server client-handle [:close req-id]))
+                                   (plasma/register-resource! req-id #(s/close! stream))
+                                   (s/consume #(send! server client-handle [:stream req-id %]) stream)
+                                   [:stream-start req-id])
+              [:ok resp] [:ok req-id resp])))))))
