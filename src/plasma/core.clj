@@ -93,7 +93,7 @@
         body                                  (if cljs?
                                                 [`(plasma.client/rpc!
                                                     '~(symbol ns-name (str name))
-                                                    ~bindings)]
+                                                    ~new-bindings)]
                                                 body)]
     `(do ~@req
          (defn ~name
@@ -120,7 +120,7 @@
         body                                  (if cljs?
                                                 [`(plasma.client/stream-rpc!
                                                     '~(symbol ns-name (str name))
-                                                    ~bindings)]
+                                                    ~new-bindings)]
                                                 body)]
     `(do ~@req
          (defn ~name
