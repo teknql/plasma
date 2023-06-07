@@ -37,28 +37,62 @@
   "Build a transport using a websocket"
   ([url] (websocket-transport url {}))
   ([url {:keys [on-open on-close on-error
+                on-reconnect auto-reconnect?
                 transit-read-handlers
                 transit-write-handlers]}]
-   (let [ws     (js/WebSocket. url)
+   (let [auto-reconnect?
+         (if (#{false} auto-reconnect?) false true)
          reader (t/reader :json {:handlers transit-read-handlers})
          writer (t/writer :json {:handlers transit-write-handlers})
          state  (atom {:connected? false :buffer []})
+
+         ws     (atom nil)
          send-f #(if (:connected? @state)
-                   (.send ws (t/write writer %&))
-                   (swap! state update :buffer conj %&))]
-     (set! (.-onopen ws)
-           (fn []
-             (swap! state assoc :connected? true)
-             (doseq [msg (:buffer @state)]
-               (apply send-f msg))
-             (swap! state assoc :buffer [])
-             (when on-open (on-open))))
-     (set! (.-onclose ws) #(do (swap! state assoc :connected? false)
-                               (when on-close (on-close))))
-     (when on-error
-       (set! (.-onerror ws) on-error))
-     (set! (.-onmessage ws)
-           #(receive! (t/read reader (.-data %))))
+                   (.send @ws (t/write writer %&))
+                   (swap! state update :buffer conj %&))
+
+         -on-open    (fn []
+                       (swap! state assoc :connected? true)
+                       (doseq [msg (:buffer @state)]
+                         (apply send-f msg))
+                       (swap! state assoc :buffer [])
+                       (when on-open (on-open)))
+         -on-close   (fn []
+                       (swap! state assoc :connected? false)
+                       (when on-close (on-close)))
+         -on-message #(receive! (t/read reader (.-data %)))
+
+         reconnect-timer (atom nil)
+         reconnect-count (atom 0)
+         setup-ws
+         (fn reconnect-ws []
+           (reset! ws (js/WebSocket. url))
+           (set! (.-onopen @ws)
+                 (fn []
+                   (when @reconnect-timer
+                     (js/clearTimeout @reconnect-timer)
+                     (when on-reconnect (on-reconnect)))
+                   (reset! reconnect-count 0)
+                   (-on-open)))
+           (set! (.-onclose @ws)
+                 (fn []
+                   (-on-close)
+                   (when auto-reconnect?
+                     (when @reconnect-timer
+                       (js/clearTimeout @reconnect-timer))
+                     (let [reconnect-t (+ (* (dec (Math/pow 2 @reconnect-count)) 500) 1000)]
+                       (.log js/console (str "reconnecting in " reconnect-t))
+                       (reset! reconnect-timer
+                               (js/setTimeout
+                                 (fn []
+                                   (swap! reconnect-count inc)
+                                   (.log js/console (str "reconnect attempt " @reconnect-count))
+                                   (js/clearTimeout @reconnect-timer)
+                                   (reconnect-ws))
+                                 reconnect-t))))))
+           (when on-error (set! (.-onerror @ws) on-error))
+           (set! (.-onmessage @ws) -on-message))]
+     (setup-ws)
      send-f)))
 
 (defn use-transport!
