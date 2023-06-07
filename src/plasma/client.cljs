@@ -39,26 +39,25 @@
   ([url {:keys [on-open on-close on-error
                 on-reconnect auto-reconnect?
                 transit-read-handlers
-                transit-write-handlers]}]
-   (let [auto-reconnect?
-         (if (#{false} auto-reconnect?) false true)
-         reader (t/reader :json {:handlers transit-read-handlers})
-         writer (t/writer :json {:handlers transit-write-handlers})
-         state  (atom {:connected? false :buffer []})
+                transit-write-handlers]
+         :or   {auto-reconnect? true}}]
+   (let [reader   (t/reader :json {:handlers transit-read-handlers})
+         writer   (t/writer :json {:handlers transit-write-handlers})
+         ws-state (atom {:connected? false :buffer []})
 
          ws     (atom nil)
-         send-f #(if (:connected? @state)
+         send-f #(if (:connected? @ws-state)
                    (.send @ws (t/write writer %&))
-                   (swap! state update :buffer conj %&))
+                   (swap! ws-state update :buffer conj %&))
 
          -on-open    (fn []
-                       (swap! state assoc :connected? true)
-                       (doseq [msg (:buffer @state)]
+                       (swap! ws-state assoc :connected? true)
+                       (doseq [msg (:buffer @ws-state)]
                          (apply send-f msg))
-                       (swap! state assoc :buffer [])
+                       (swap! ws-state assoc :buffer [])
                        (when on-open (on-open)))
          -on-close   (fn []
-                       (swap! state assoc :connected? false)
+                       (swap! ws-state assoc :connected? false)
                        (when on-close (on-close)))
          -on-message #(receive! (t/read reader (.-data %)))
 
