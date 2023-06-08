@@ -70,7 +70,13 @@
                  (fn []
                    (when @reconnect-timer
                      (js/clearTimeout @reconnect-timer)
-                     (when on-reconnect (on-reconnect)))
+                     (when on-reconnect (on-reconnect))
+
+                     ;; re-request known streams
+                     (->> @state vals (filter map?)
+                          (map (fn [{:keys [resource-id event args]}]
+                                 (send-f :plasma/request resource-id event args)))
+                          doall))
                    (reset! reconnect-count 0)
                    (-on-open)))
            (set! (.-onclose @ws)
@@ -118,7 +124,8 @@
 
   Returns a plasma stream."
   [event args]
-  (let [{:keys [resource-id] :as s} (s/stream)]
+  (let [{:keys [resource-id] :as s} (s/stream)
+        s                           (assoc s :event event :args args)]
     (swap! state assoc resource-id s)
     (transport/send! :plasma/request resource-id event args)
     s))
