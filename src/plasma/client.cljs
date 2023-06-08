@@ -6,8 +6,8 @@
 
 
 (def ^:private state
-  "The state of plasma."
-  (atom {}))
+  "The state of plasma. Maintains pending rpc and stream requests."
+  (atom {:client-id (random-uuid)}))
 
 (defn event?
   "Return true if the provided item matches a plasma event signature.
@@ -41,7 +41,10 @@
                 transit-read-handlers
                 transit-write-handlers]
          :or   {auto-reconnect? true}}]
-   (let [reader   (t/reader :json {:handlers transit-read-handlers})
+   (let [url      (if (re-seq #"client-id" url) url
+                      ;; TODO proper query param add
+                      (str url "?client-id=" (:client-id @state)))
+         reader   (t/reader :json {:handlers transit-read-handlers})
          writer   (t/writer :json {:handlers transit-write-handlers})
          ws-state (atom {:connected? false :buffer []})
 
