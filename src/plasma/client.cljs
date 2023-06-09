@@ -44,57 +44,62 @@
    (let [reader   (t/reader :json {:handlers transit-read-handlers})
          writer   (t/writer :json {:handlers transit-write-handlers})
          ws-state (atom {:connected? false :buffer []})
-
-         ws     (atom nil)
-         send-f #(if (:connected? @ws-state)
-                   (.send @ws (t/write writer %&))
-                   (swap! ws-state update :buffer conj %&))
-
-         -on-open    (fn []
-                       (swap! ws-state assoc :connected? true)
-                       (doseq [msg (:buffer @ws-state)]
-                         (apply send-f msg))
-                       (swap! ws-state assoc :buffer [])
-                       (when on-open (on-open)))
-         -on-close   (fn []
-                       (swap! ws-state assoc :connected? false)
-                       (when on-close (on-close)))
-         -on-message #(receive! (t/read reader (.-data %)))
+         ws       (atom nil)
+         send-f   #(if (:connected? @ws-state)
+                     (.send @ws (t/write writer %&))
+                     (swap! ws-state update :buffer conj %&))
 
          reconnect-timer (atom nil)
          reconnect-count (atom 0)
+
+         -on-message #(receive! (t/read reader (.-data %)))
+
+         -on-open (fn []
+                    (let [reconnecting? @reconnect-timer]
+                      (when @reconnect-timer
+                        (js/clearTimeout @reconnect-timer)
+                        ;; re-request known streams
+                        (->> @state vals (filter map?)
+                             (map (fn [{:keys [resource-id event args]}]
+                                    (send-f :plasma/request resource-id event args)))
+                             doall)
+                        (reset! reconnect-count 0))
+
+                      ;; send any buffered messages
+                      (swap! ws-state assoc :connected? true)
+                      (doseq [msg (:buffer @ws-state)]
+                        (apply send-f msg))
+                      (swap! ws-state assoc :buffer [])
+
+                      ;; call either on-reconnect or on-open
+                      (when (and reconnecting? on-reconnect)
+                        (on-reconnect))
+                      (when (and (not reconnecting?) on-open)
+                        (on-open))))
+
+         -on-close (fn [reconnect-f]
+                     (swap! ws-state assoc :connected? false)
+                     (when on-close (on-close))
+
+                     (when auto-reconnect?
+                       (when @reconnect-timer
+                         (js/clearTimeout @reconnect-timer))
+                       (let [reconnect-ms (+ (* (dec (Math/pow 2 @reconnect-count)) 500) 1000)]
+                         (reset! reconnect-timer
+                                 (js/setTimeout
+                                   (fn []
+                                     (swap! reconnect-count inc)
+                                     (js/clearTimeout @reconnect-timer)
+                                     (reconnect-f))
+                                   reconnect-ms)))))
+
          setup-ws
          (fn reconnect-ws []
            (reset! ws (js/WebSocket. url))
-           (set! (.-onopen @ws)
-                 (fn []
-                   (when @reconnect-timer
-                     (js/clearTimeout @reconnect-timer)
-                     (when on-reconnect (on-reconnect))
-
-                     ;; re-request known streams
-                     (->> @state vals (filter map?)
-                          (map (fn [{:keys [resource-id event args]}]
-                                 (send-f :plasma/request resource-id event args)))
-                          doall))
-                   (reset! reconnect-count 0)
-                   (-on-open)))
+           (set! (.-onopen @ws) -on-open)
            (set! (.-onclose @ws)
-                 (fn []
-                   (-on-close)
-                   (when auto-reconnect?
-                     (when @reconnect-timer
-                       (js/clearTimeout @reconnect-timer))
-                     (let [reconnect-t (+ (* (dec (Math/pow 2 @reconnect-count)) 500) 1000)]
-                       (.log js/console (str "reconnecting in " reconnect-t))
-                       (reset! reconnect-timer
-                               (js/setTimeout
-                                 (fn []
-                                   (swap! reconnect-count inc)
-                                   (.log js/console (str "reconnect attempt " @reconnect-count))
-                                   (js/clearTimeout @reconnect-timer)
-                                   (reconnect-ws))
-                                 reconnect-t))))))
+                 ;; note passing _this_ function in as an arg here
+                 (partial -on-close reconnect-ws))
            (when on-error (set! (.-onerror @ws) on-error))
            (set! (.-onmessage @ws) -on-message))]
      (setup-ws)
