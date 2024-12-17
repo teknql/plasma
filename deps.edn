@@ -1,4 +1,4 @@
-{:paths ["src"]
+{:paths ["src" "resources"]
  :deps
  {funcool/promesa            {:mvn/version "8.0.450"}
   manifold/manifold          {:mvn/version "0.2.4"}
@@ -6,7 +6,6 @@
   com.cognitect/transit-cljs {:mvn/version "0.8.280"}
   org.clojure/core.match     {:mvn/version "1.0.0"}
   metosin/sieppari           {:mvn/version "0.0.0-alpha13"}}
-
  :aliases
  {:outdated {:extra-deps {com.github.liquidz/antq {:mvn/version "1.9.867"}}
              :main-opts  ["-m" "antq.core"]}}}

@@ -1,0 +1,5 @@
+{:hooks
+ {:analyze-call
+  {#_shadow.grove/defc      #_clj-kondo.shadow.grove/defc
+   plasma.core/defhandler clj-kondo.teknql.plasma/defhandler
+   plasma.core/defstream  clj-kondo.teknql.plasma/defhandler}}}
